@@ -16,7 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateOrderSimulationDto } from './dto/create-order-simulation.dto';
-import { CreateCouponDto } from './dto/seed-coupon.dto';
+import { CreateCouponDto } from './dto/create-coupon.dto';
 import { OrdersService } from './orders.service';
 
 @ApiTags('orders')
