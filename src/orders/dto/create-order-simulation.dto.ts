@@ -62,9 +62,13 @@ export class CreateOrderSimulationDto {
   @Type(() => CreateOrderItemDto)
   items!: CreateOrderItemDto[];
 
-  @ApiProperty({ example: 'SUMMER10' })
+  @ApiPropertyOptional({
+    example: 'SUMMER10',
+    description: 'Optional coupon code to apply discount usage logic',
+  })
+  @IsOptional()
   @IsString()
-  couponCode!: string;
+  couponCode?: string;
 
   @ApiPropertyOptional({ type: () => SimulationOptionsDto })
   @IsOptional()

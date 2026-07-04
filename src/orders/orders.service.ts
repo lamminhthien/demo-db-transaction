@@ -15,6 +15,37 @@ export class OrdersService {
 
   constructor(private readonly em: EntityManager) {}
 
+  private mapOrder(order: Order) {
+    return {
+      id: order.id,
+      customerName: order.customerName,
+      status: order.status,
+      totalAmount: Number(order.totalAmount),
+      coupon: order.coupon
+        ? {
+            id: order.coupon.id,
+            code: order.coupon.code,
+            discountPercent: order.coupon.discountPercent,
+            used: order.coupon.used,
+          }
+        : null,
+      items: order.items.getItems().map((item) => ({
+        id: item.id,
+        sku: item.sku,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice),
+        lineTotal: Number(item.lineTotal),
+      })),
+      audits: order.audits.getItems().map((audit) => ({
+        id: audit.id,
+        action: audit.action,
+        note: audit.note ?? null,
+        createdAt: audit.createdAt ?? null,
+      })),
+      createdAt: order.createdAt ?? null,
+    };
+  }
+
   async seedCoupon(code: string, discountPercent = 10) {
     const existing = await this.em.findOne(Coupon, { code });
     if (existing) {
@@ -36,20 +67,26 @@ export class OrdersService {
     await fork.begin();
 
     try {
-      const coupon = await fork.findOne(
-        Coupon,
-        { code: dto.couponCode },
-        {
-          lockMode: LockMode.PESSIMISTIC_WRITE,
-        },
-      );
+      let coupon: Coupon | null = null;
 
-      if (!coupon) {
-        throw new NotFoundException(`Coupon ${dto.couponCode} was not found.`);
-      }
+      if (dto.couponCode) {
+        coupon = await fork.findOne(
+          Coupon,
+          { code: dto.couponCode },
+          {
+            lockMode: LockMode.PESSIMISTIC_WRITE,
+          },
+        );
 
-      if (coupon.used) {
-        throw new BadRequestException('Coupon was already used.');
+        if (!coupon) {
+          throw new NotFoundException(
+            `Coupon ${dto.couponCode} was not found.`,
+          );
+        }
+
+        if (coupon.used) {
+          throw new BadRequestException('Coupon was already used.');
+        }
       }
 
       const totalAmount = dto.items.reduce(
@@ -61,7 +98,7 @@ export class OrdersService {
         customerName: dto.order.customerName,
         status: 'CREATED',
         totalAmount,
-        coupon,
+        coupon: coupon ?? undefined,
       });
 
       const items = dto.items.map((item) =>
@@ -80,8 +117,13 @@ export class OrdersService {
         note: 'Order transaction simulation started',
       });
 
-      coupon.used = true;
-      fork.persist([order, ...items, coupon, audit]);
+      if (coupon) {
+        coupon.used = true;
+      }
+
+      fork.persist(
+        coupon ? [order, ...items, coupon, audit] : [order, ...items, audit],
+      );
       await fork.flush();
 
       if (dto.simulation?.shouldFail) {
@@ -105,10 +147,56 @@ export class OrdersService {
       return {
         status: 'Success',
         orderId: order.id,
+        couponCode: coupon?.code ?? null,
       };
     } catch (error) {
       await fork.rollback();
       throw error;
     }
+  }
+
+  async getDiscountList() {
+    const coupons = await this.em.find(
+      Coupon,
+      {},
+      {
+        orderBy: { createdAt: 'DESC' },
+      },
+    );
+
+    return coupons.map((coupon) => ({
+      id: coupon.id,
+      code: coupon.code,
+      discountPercent: coupon.discountPercent,
+      used: coupon.used,
+      createdAt: coupon.createdAt ?? null,
+    }));
+  }
+
+  async getOrders() {
+    const orders = await this.em.find(
+      Order,
+      {},
+      {
+        populate: ['items', 'coupon', 'audits'],
+        orderBy: { createdAt: 'DESC' },
+      },
+    );
+
+    return orders.map((order) => this.mapOrder(order));
+  }
+
+  async getOrderById(id: number) {
+    const order = await this.em.findOne(
+      Order,
+      { id },
+      { populate: ['items', 'coupon', 'audits'] },
+    );
+
+    if (!order) {
+      throw new NotFoundException(`Order ${id} was not found.`);
+    }
+
+    return this.mapOrder(order);
   }
 }

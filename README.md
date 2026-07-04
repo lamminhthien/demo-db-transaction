@@ -71,6 +71,19 @@ curl -X POST http://localhost:3000/orders/simulate \
     "order": { "customerName": "Alice" },
     "items": [
       { "sku": "SKU-001", "quantity": 2, "unitPrice": 50 }
+    ]
+  }'
+```
+
+Run simulation with coupon (optional field):
+
+```bash
+curl -X POST http://localhost:3000/orders/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order": { "customerName": "Alice" },
+    "items": [
+      { "sku": "SKU-001", "quantity": 2, "unitPrice": 50 }
     ],
     "couponCode": "SUMMER10"
   }'
@@ -104,6 +117,24 @@ curl -X POST http://localhost:3000/orders/simulate \
     "couponCode": "SUMMER10",
     "simulation": { "noCommit": true }
   }'
+```
+
+Fetch discount list:
+
+```bash
+curl http://localhost:3000/orders/discounts
+```
+
+Fetch order list:
+
+```bash
+curl http://localhost:3000/orders
+```
+
+Fetch one order by id:
+
+```bash
+curl http://localhost:3000/orders/101
 ```
 
 ## 6. Verify in PostgreSQL UI

@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBody,
@@ -21,7 +21,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Simulate order creation in a transaction',
     description:
-      'Creates an order with items, locks/uses a coupon, and supports intentional rollback simulation flags.',
+      'Creates an order with items, optionally locks/uses a coupon, and supports intentional rollback simulation flags.',
   })
   @ApiOkResponse({
     description: 'Order simulation completed.',
@@ -41,6 +41,11 @@ export class OrdersController {
           example: 'Transaction has been flushed but intentionally not committed.',
           nullable: true,
         },
+        couponCode: {
+          type: 'string',
+          example: 'SUMMER10',
+          nullable: true,
+        },
       },
       required: ['status', 'orderId'],
     },
@@ -53,6 +58,50 @@ export class OrdersController {
   })
   createOrderSimulation(@Body() dto: CreateOrderSimulationDto) {
     return this.ordersService.createOrderSimulation(dto);
+  }
+
+  @Get('discounts')
+  @ApiOperation({
+    summary: 'Fetch available discount list',
+    description: 'Returns all coupons with discount data and usage status.',
+  })
+  @ApiOkResponse({
+    description: 'Discount list fetched successfully.',
+  })
+  getDiscountList() {
+    return this.ordersService.getDiscountList();
+  }
+
+  @Get()
+  @ApiOperation({
+    summary: 'Fetch order list',
+    description: 'Returns all orders with items, coupon info, and audit trail.',
+  })
+  @ApiOkResponse({
+    description: 'Order list fetched successfully.',
+  })
+  getOrders() {
+    return this.ordersService.getOrders();
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Fetch order by id',
+    description: 'Returns a single order with items, coupon info, and audit trail.',
+  })
+  @ApiParam({
+    name: 'id',
+    example: 101,
+    description: 'Order id',
+  })
+  @ApiOkResponse({
+    description: 'Order fetched successfully.',
+  })
+  @ApiNotFoundResponse({
+    description: 'Order not found.',
+  })
+  getOrderById(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.getOrderById(id);
   }
 
   @Post('coupons/:code')
