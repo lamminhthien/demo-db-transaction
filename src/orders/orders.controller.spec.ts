@@ -13,7 +13,7 @@ describe('OrdersController', () => {
           provide: OrdersService,
           useValue: {
             createOrderSimulation: jest.fn(),
-            seedCoupon: jest.fn(),
+            createCoupon: jest.fn(),
           },
         },
       ],

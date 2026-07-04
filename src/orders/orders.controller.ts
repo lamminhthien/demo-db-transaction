@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBody,
@@ -9,7 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateOrderSimulationDto } from './dto/create-order-simulation.dto';
-import { SeedCouponDto } from './dto/seed-coupon.dto';
+import { CreateCouponDto } from './dto/seed-coupon.dto';
 import { OrdersService } from './orders.service';
 
 @ApiTags('orders')
@@ -38,7 +45,8 @@ export class OrdersController {
         },
         message: {
           type: 'string',
-          example: 'Transaction has been flushed but intentionally not committed.',
+          example:
+            'Transaction has been flushed but intentionally not committed.',
           nullable: true,
         },
         couponCode: {
@@ -87,7 +95,8 @@ export class OrdersController {
   @Get(':id')
   @ApiOperation({
     summary: 'Fetch order by id',
-    description: 'Returns a single order with items, coupon info, and audit trail.',
+    description:
+      'Returns a single order with items, coupon info, and audit trail.',
   })
   @ApiParam({
     name: 'id',
@@ -107,21 +116,19 @@ export class OrdersController {
   @Post('coupons/:code')
   @ApiOperation({
     summary: 'Create or get a coupon by code',
-    description: 'Seeds a coupon for simulation. Returns existing coupon when code already exists.',
+    description:
+      'Seeds a coupon for simulation. Returns existing coupon when code already exists.',
   })
   @ApiParam({
     name: 'code',
     example: 'SUMMER10',
     description: 'Coupon code identifier',
   })
-  @ApiBody({ type: SeedCouponDto })
+  @ApiBody({ type: CreateCouponDto })
   @ApiOkResponse({
     description: 'Coupon created or returned if it already exists.',
   })
-  seedCoupon(
-    @Param('code') code: string,
-    @Body() dto: SeedCouponDto,
-  ) {
-    return this.ordersService.seedCoupon(code, dto.discountPercent);
+  createCoupon(@Param('code') code: string, @Body() dto: CreateCouponDto) {
+    return this.ordersService.createCoupon(code, dto.discountPercent);
   }
 }

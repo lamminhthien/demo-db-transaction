@@ -46,7 +46,7 @@ export class OrdersService {
     };
   }
 
-  async seedCoupon(code: string, discountPercent = 10) {
+  async createCoupon(code: string, discountPercent = 10) {
     const existing = await this.em.findOne(Coupon, { code });
     if (existing) {
       return existing;
@@ -70,13 +70,7 @@ export class OrdersService {
       let coupon: Coupon | null = null;
 
       if (dto.couponCode) {
-        coupon = await fork.findOne(
-          Coupon,
-          { code: dto.couponCode },
-          {
-            lockMode: LockMode.PESSIMISTIC_WRITE,
-          },
-        );
+        coupon = await fork.findOne(Coupon, { code: dto.couponCode });
 
         if (!coupon) {
           throw new NotFoundException(

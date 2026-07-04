@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNumber, IsOptional, Max, Min } from 'class-validator';
 
-export class SeedCouponDto {
+export class CreateCouponDto {
   @ApiPropertyOptional({
     description: 'Coupon discount percent. Defaults to 10 when omitted.',
     minimum: 0,
