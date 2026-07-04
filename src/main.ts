@@ -5,6 +5,17 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Enable CORS for Vercel
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
+  // Trust proxy for proper cookie/header handling behind Vercel's proxy
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', true);
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

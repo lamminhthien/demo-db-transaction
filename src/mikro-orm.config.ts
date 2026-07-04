@@ -9,6 +9,11 @@ const mikroOrmConfig = defineConfig({
   password: process.env.DB_PASSWORD ?? 'postgres',
   dbName: process.env.DB_NAME ?? 'demo_tx',
   entities: [Order, OrderItem, Coupon, OrderAudit],
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
+  pool: {
+    min: 1,
+    max: 12,
+  },
   debug: process.env.DB_DEBUG === 'true',
   extensions: [Migrator],
   migrations: {
