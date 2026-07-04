@@ -1,98 +1,143 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Demo DB Transaction (NestJS + MikroORM)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This project demonstrates a transaction simulator using a forked MikroORM `EntityManager`.
+It is designed to help you visualize `BEGIN`, `FLUSH`, `COMMIT`, and `ROLLBACK` behavior in PostgreSQL.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 1. Scaffold Commands (Tutorial)
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+These are the Nest CLI commands used to create the feature structure:
 
 ```bash
-$ pnpm install
+nest g module orders
+nest g controller orders
+nest g service orders
 ```
 
-## Compile and run the project
+`OrdersModule` registers entities with `MikroOrmModule.forFeature([Order, OrderItem, Coupon, OrderAudit])`.
+
+## 2. Start PostgreSQL with Docker
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+cp .env.example .env
+docker compose up -d
 ```
 
-## Run tests
+The default DB settings are:
+
+- Host: `localhost`
+- Port: `5432`
+- User: `postgres`
+- Password: `postgres`
+- Database: `demo_tx`
+
+## 3. Install and Run
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+npm install
+npm run migration:up
+npm run start:dev
 ```
 
-## Deployment
+## 4. Transaction Simulation Flow
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+In `OrdersService.createOrderSimulation`:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+1. `em.fork()` creates an isolated unit of work.
+2. `fork.begin()` explicitly starts a transaction.
+3. Business operations create `Order`, `OrderItem`, update `Coupon`, create `OrderAudit`.
+4. `fork.flush()` sends SQL to PostgreSQL.
+5. Conditional behavior:
+   - `simulation.shouldFail = true` throws and triggers rollback.
+   - `simulation.noCommit = true` intentionally leaves transaction open.
+6. `fork.commit()` finalizes changes.
+7. Any error path executes `fork.rollback()`.
+
+## 5. API Endpoints
+
+Create coupon for testing:
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+curl -X POST http://localhost:3000/orders/coupons/SUMMER10 \
+  -H "Content-Type: application/json" \
+  -d '{"discountPercent":10}'
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Run successful simulation:
 
-## Resources
+```bash
+curl -X POST http://localhost:3000/orders/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order": { "customerName": "Alice" },
+    "items": [
+      { "sku": "SKU-001", "quantity": 2, "unitPrice": 50 }
+    ],
+    "couponCode": "SUMMER10"
+  }'
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Force rollback:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+curl -X POST http://localhost:3000/orders/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order": { "customerName": "Bob" },
+    "items": [
+      { "sku": "SKU-002", "quantity": 1, "unitPrice": 70 }
+    ],
+    "couponCode": "SUMMER10",
+    "simulation": { "shouldFail": true }
+  }'
+```
 
-## Support
+Leave transaction open (no commit):
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+curl -X POST http://localhost:3000/orders/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order": { "customerName": "Charlie" },
+    "items": [
+      { "sku": "SKU-003", "quantity": 3, "unitPrice": 40 }
+    ],
+    "couponCode": "SUMMER10",
+    "simulation": { "noCommit": true }
+  }'
+```
 
-## Stay in touch
+## 6. Verify in PostgreSQL UI
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+In pgAdmin or TablePlus, run:
 
-## License
+```sql
+SELECT pid, state, query, xact_start
+FROM pg_stat_activity
+WHERE state = 'idle in transaction';
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+You should see the session that is holding transaction state and row-level locks.
+
+## 7. Migration Files
+
+Initial migration file:
+
+- `src/migrations/Migration20260704000100.ts`
+
+Useful commands:
+
+```bash
+npm run migration:create
+npm run migration:up
+npm run migration:down
+```
+
+## 8. Transaction Method Summary
+
+| Method | Purpose |
+| --- | --- |
+| `em.fork()` | Creates an isolated EM context for a request/transaction. |
+| `fork.begin()` | Starts a PostgreSQL transaction block (`BEGIN`). |
+| `fork.flush()` | Computes UoW changes and sends SQL (`INSERT/UPDATE`). |
+| `fork.commit()` | Persists changes permanently (`COMMIT`). |
+| `fork.rollback()` | Aborts all uncommitted changes (`ROLLBACK`). |
