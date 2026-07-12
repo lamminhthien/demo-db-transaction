@@ -42,7 +42,79 @@ async processOrder(dto: CreateOrderDto) {
     - Với process call api gửi email xác nhận cũng sẽ có vấn đề tương tự như call api thanh toán
     - Thậm chí cả process không có try catch block để commit khi thành công và rollback khi có lỗi xảy ra
 - Viết lại thành phiên bản đúng
+  - Phiên bản đúng của em, em sẽ không để phần tạo đơn status created trong transaction mà em tách nó ra 1 query riêng lẻ, vì nếu có lỡ failed process thanh toán thì mình vẫn còn có order ở trạng thái created để mình đi fulfilled lại order
+  - Với query trừ tồn kho sản phẩm, nên để trong transaction để tranh app lỗi thì còn có thể rollback data lại
+  - transaction em sẽ mở trước khi vô flow trừ tồn kho từng sản phẩm, và cho tới bước update trạng thái order, sẽ đóng lại transaction
+  - Code em đã sửa:
+  ```ts
+  async processOrder(dto: CreateOrderDto) {
+    // 1. Tạo order trước để luôn có record tham chiếu và có thể retry/reconcile về sau
+    const order = await this.prisma.order.create({
+      data: {
+        userId: dto.userId,
+        total: dto.total,
+        status: 'CREATED',
+      },
+    });
+
+    try {
+      // 2. Transaction chỉ bao phần DB critical: trừ tồn kho + cập nhật trạng thái trung gian
+      await this.prisma.$transaction(async (tx) => {
+        for (const item of dto.items) {
+          const product = await tx.product.updateMany({
+            where: {
+              id: item.productId,
+              stock: { gte: item.quantity },
+            },
+            data: {
+              stock: { decrement: item.quantity },
+            },
+          });
+
+          if (product.count === 0) {
+            throw new Error(`Product ${item.productId} is out of stock`);
+          }
+        }
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: { status: 'PENDING_PAYMENT' },
+        });
+      });
+
+      // 3. Gọi cổng thanh toán ngoài transaction để không giữ lock DB quá lâu
+      const payment = await this.httpService.post(
+        'https://gateway.vn/charge',
+        {
+          orderId: order.id,
+          amount: dto.total,
+        },
+      );
+
+      // 4. Cập nhật trạng thái sau khi có kết quả thanh toán
+      await this.prisma.order.update({
+        where: { id: order.id },
+        data: { status: payment.ok ? 'PAID' : 'FAILED' },
+      });
+
+      // 5. Gửi email ngoài transaction
+      if (payment.ok) {
+        await this.mailService.sendOrderConfirmation(order.id);
+      }
+
+      return order;
+    } catch (error) {
+      // Nếu lỗi sau bước trừ tồn kho, order vẫn còn để hệ thống retry hoặc xử lý bù
+      await this.prisma.order.update({
+        where: { id: order.id },
+        data: { status: 'FAILED' },
+      });
+
+      throw error;
+    }
+  }
+  ```
 - Câu hỏi mở: với phiên bản đã sửa, nếu app **crash ngay sau khi** cổng thanh toán trả về thành công nhưng **trước khi** update status thi dữ liệu sẽ ở trạng thái nào? Đề xuất 1 hướng xử lý
-- Em nghĩ app sẽ ở trạng thái initiated
+- Em nghĩ dữ liệu sẽ ở trạng thái created, nếu mà để cải thiện flow này hơn, thì em cần call thêm api check payment status trước khi gọi cổng thanh toán, để tránh việc user thanh toán hai lần
 
 
