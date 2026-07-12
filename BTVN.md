@@ -105,7 +105,7 @@ async processOrder(dto: CreateOrderDto) {
 
       return order;
     } catch (error) {
-      // Nếu đã thanh toán tiền nhưng trừ kho thất bại, cần mark trạng thái để refund/reconcile, và nếu có audit log để ghi lại lịch sử update status order, nó sẽ dễ giúp mình đối chiếu thông tin tốt hơn
+      // Nếu đã thanh toán tiền nhưng cập nhật số lượng hàng trong kho thất bại, cần update trạng thái UPDATE_STOCK_FAILED để refund/reconcile, và nếu có audit log để ghi lại lịch sử update status order, nó sẽ dễ giúp mình đối chiếu thông tin tốt hơn
       await this.prisma.order.update({
         where: { id: order.id },
         data: { status: 'UPDATE_STOCK_FAILED' },
