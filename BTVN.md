@@ -44,7 +44,7 @@ async processOrder(dto: CreateOrderDto) {
 - Viết lại thành phiên bản đúng
   - Phiên bản đúng của em, em sẽ không để phần tạo đơn status created trong transaction mà em tách nó ra 1 query riêng lẻ, vì nếu có lỡ failed process thanh toán thì mình vẫn còn có order ở trạng thái created để mình đi fulfilled lại order
   - Với query trừ tồn kho sản phẩm, nên để trong transaction để tranh app lỗi thì còn có thể rollback data lại
-  - transaction em sẽ mở trước khi vô flow trừ tồn kho từng sản phẩm, và cho tới bước update trạng thái order, sẽ đóng lại transaction
+  - Flow call api thanh toán sẽ nằm ngoài transaction. Chỉ khi thanh toán thành công thì mới mở transaction thứ 2 để trừ kho và cập nhật trạng thái đơn
   - Code em đã sửa:
   ```ts
   async processOrder(dto: CreateOrderDto) {
@@ -58,7 +58,25 @@ async processOrder(dto: CreateOrderDto) {
     });
 
     try {
-      // 2. Transaction chỉ bao phần DB critical: trừ tồn kho + cập nhật trạng thái trung gian
+      // 2. Gọi cổng thanh toán ngoài transaction để không giữ lock DB quá lâu
+      const payment = await this.httpService.post(
+        'https://gateway.vn/charge',
+        {
+          orderId: order.id,
+          amount: dto.total,
+        },
+      );
+
+      if (!payment.ok) {
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { status: 'FAILED' },
+        });
+
+        throw new Error('Payment failed');
+      }
+
+      // 3. Chỉ sau khi thanh toán thành công mới mở transaction thứ 2
       await this.prisma.$transaction(async (tx) => {
         for (const item of dto.items) {
           const product = await tx.product.updateMany({
@@ -78,36 +96,19 @@ async processOrder(dto: CreateOrderDto) {
 
         await tx.order.update({
           where: { id: order.id },
-          data: { status: 'PENDING_PAYMENT' },
+          data: { status: 'PAID' },
         });
       });
 
-      // 3. Gọi cổng thanh toán ngoài transaction để không giữ lock DB quá lâu
-      const payment = await this.httpService.post(
-        'https://gateway.vn/charge',
-        {
-          orderId: order.id,
-          amount: dto.total,
-        },
-      );
-
-      // 4. Cập nhật trạng thái sau khi có kết quả thanh toán
-      await this.prisma.order.update({
-        where: { id: order.id },
-        data: { status: payment.ok ? 'PAID' : 'FAILED' },
-      });
-
-      // 5. Gửi email ngoài transaction
-      if (payment.ok) {
-        await this.mailService.sendOrderConfirmation(order.id);
-      }
+      // 4. Gửi email ngoài transaction
+      await this.mailService.sendOrderConfirmation(order.id);
 
       return order;
     } catch (error) {
-      // Nếu lỗi sau bước trừ tồn kho, order vẫn còn để hệ thống retry hoặc xử lý bù
+      // Nếu đã charge tiền nhưng trừ kho thất bại, cần mark trạng thái để refund/reconcile
       await this.prisma.order.update({
         where: { id: order.id },
-        data: { status: 'FAILED' },
+        data: { status: 'PAYMENT_SUCCESS_STOCK_FAILED' },
       });
 
       throw error;
