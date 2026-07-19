@@ -22,7 +22,7 @@ import { OrdersService } from './orders.service';
 @ApiTags('orders')
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(private readonly ordersServices: OrdersService) {}
 
   @Post('simulate')
   @ApiOperation({
@@ -33,6 +33,7 @@ export class OrdersController {
   @ApiOkResponse({
     description: 'Order simulation completed.',
     schema: {
+      
       type: 'object',
       properties: {
         status: {

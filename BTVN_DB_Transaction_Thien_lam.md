@@ -116,6 +116,6 @@ async processOrder(dto: CreateOrderDto) {
   }
   ```
 - Câu hỏi mở: với phiên bản đã sửa, nếu app **crash ngay sau khi** cổng thanh toán trả về thành công nhưng **trước khi** update status thi dữ liệu sẽ ở trạng thái nào? Đề xuất 1 hướng xử lý
-- Em nghĩ dữ liệu sẽ ở trạng thái created, nếu mà để cải thiện flow này hơn, thì em cần call thêm api check payment status trước khi gọi cổng thanh toán, để tránh việc user thanh toán hai lần
+- Em nghĩ dữ liệu sẽ ở trạng thái created, nếu mà để cải thiện flow này hơn, thì em cần call thêm api check payment status trước khi gọi cổng thanh toán (vì em nghĩ khi mình call api qua payment gateway, mình đã có truyền order id lên service đó rồi, nên có thể truy xuất lại thông tin payment staatus được), để tránh việc user thanh toán hai lần
 
 

@@ -13,11 +13,29 @@ services:
       - '${DB_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - demo-net
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-demo_tx}']
       interval: 10s
       timeout: 5s
       retries: 5
+
+  adminer:
+    image: adminer:latest
+    container_name: demo-db-transaction-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '${ADMINER_PORT:-8080}:8080'
+    networks:
+      - demo-net
+
+networks:
+  demo-net:
+    driver: bridge
 
 volumes:
   pgdata:
